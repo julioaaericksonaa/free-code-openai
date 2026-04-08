@@ -46,6 +46,9 @@ source ~/.bashrc
 bun install
 bun run build
 chmod +x ./cli
+echo "alias code='/root/claude/free-code/cli'" >> ~/.bashrc
+source ~/.bashrc
+code
 ```
 
 上面这套流程适合 WSL2 / Ubuntu 环境，会手动拉取仓库、安装 Bun、构建 CLI，并把 `./cli` 准备好供你直接运行。

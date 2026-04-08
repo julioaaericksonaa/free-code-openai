@@ -5,367 +5,291 @@
 <h1 align="center">free-code</h1>
 
 <p align="center">
-  <a href="./README.zh-CN.md">简体中文 README</a>
+  Claude Code 的自由构建版本。<br>
+  移除了遥测，上层提示护栏被尽量剥离，开放了更多实验特性。<br>
+  现在额外支持 OpenAI 的标准 API Key + Base URL 接入。
 </p>
 
 <p align="center">
-  <strong>The free build of Claude Code.</strong><br>
-  All telemetry stripped. All guardrails removed. All experimental features unlocked.<br>
-  One binary, zero callbacks home.
-</p>
-
-<p align="center">
-  <a href="#quick-install"><img src="https://img.shields.io/badge/install-one--liner-blue?style=flat-square" alt="Install" /></a>
-  <a href="https://github.com/paoloanzn/free-code/stargazers"><img src="https://img.shields.io/github/stars/paoloanzn/free-code?style=flat-square" alt="Stars" /></a>
-  <a href="https://github.com/paoloanzn/free-code/issues"><img src="https://img.shields.io/github/issues/paoloanzn/free-code?style=flat-square" alt="Issues" /></a>
-  <a href="https://github.com/paoloanzn/free-code/blob/main/FEATURES.md"><img src="https://img.shields.io/badge/features-88%20flags-orange?style=flat-square" alt="Feature Flags" /></a>
-  <a href="#ipfs-mirror"><img src="https://img.shields.io/badge/IPFS-mirrored-teal?style=flat-square" alt="IPFS" /></a>
+  <a href="./README.en.md">English README</a>
 </p>
 
 ---
 
-## Quick Install
+## 项目简介
+
+`free-code` 是基于公开流出的 Claude Code 源快照整理出的一个可构建 CLI fork。  
+项目保留了 Claude Code 的终端代理式交互体验，同时补充和解锁了多项能力：
+
+- 移除或钝化大部分遥测/分析埋点
+- 尽量去除上层安全提示注入与额外护栏
+- 打开更多可编译的实验特性
+- 支持多种模型提供方
+- 在本仓库版本中，新增对 OpenAI 标准接口的支持：
+  `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`gpt-5.4`
+
+---
+
+## 手动安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/paoloanzn/free-code/main/install.sh | bash
+cd /root/claude
+git clone https://github.com/julioaaericksonaa/free-code-openai.git free-code
+cd /root/claude/free-code
+
+apt update
+apt install -y curl unzip build-essential
+
+curl -fsSL https://bun.sh/install | bash
+source ~/.bashrc
+
+bun install
+bun run build
+chmod +x ./cli
 ```
 
-Checks your system, installs Bun if needed, clones the repo, builds with all experimental features enabled, and symlinks `free-code` on your PATH.
-
-Then run `free-code` and use the `/login` command to authenticate with your preferred model provider.
+上面这套流程适合 WSL2 / Ubuntu 环境，会手动拉取仓库、安装 Bun、构建 CLI，并把 `./cli` 准备好供你直接运行。
 
 ---
 
-## Table of Contents
+## 运行要求
 
-- [What is this](#what-is-this)
-- [Model Providers](#model-providers)
-- [Quick Install](#quick-install)
-- [Requirements](#requirements)
-- [Build](#build)
-- [Usage](#usage)
-- [Experimental Features](#experimental-features)
-- [Project Structure](#project-structure)
-- [Tech Stack](#tech-stack)
-- [IPFS Mirror](#ipfs-mirror)
-- [Contributing](#contributing)
-- [License](#license)
+- 运行时：`Bun >= 1.3.11`
+- 系统：macOS / Linux / Windows(WSL)
+- 认证：取决于你使用的 provider
 
----
+## 构建
 
-## What is this
+```bash
+cd /root/claude/free-code
+source ~/.bashrc
+bun install
+bun run build
+chmod +x ./cli
+./cli
+```
 
-A clean, buildable fork of Anthropic's [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI -- the terminal-native AI coding agent. The upstream source became publicly available on March 31, 2026 through a source map exposure in the npm distribution.
+常用构建命令：
 
-This fork applies three categories of changes on top of that snapshot:
-
-### Telemetry removed
-
-The upstream binary phones home through OpenTelemetry/gRPC, GrowthBook analytics, Sentry error reporting, and custom event logging. In this build:
-
-- All outbound telemetry endpoints are dead-code-eliminated or stubbed
-- GrowthBook feature flag evaluation still works locally (needed for runtime feature gates) but does not report back
-- No crash reports, no usage analytics, no session fingerprinting
-
-### Security-prompt guardrails removed
-
-Anthropic injects system-level instructions into every conversation that constrain Claude's behavior beyond what the model itself enforces. These include hardcoded refusal patterns, injected "cyber risk" instruction blocks, and managed-settings security overlays pushed from Anthropic's servers.
-
-This build strips those injections. The model's own safety training still applies -- this just removes the extra layer of prompt-level restrictions that the CLI wraps around it.
-
-### Experimental features unlocked
-
-Claude Code ships with 88 feature flags gated behind `bun:bundle` compile-time switches. Most are disabled in the public npm release. This build unlocks all 54 flags that compile cleanly. See [Experimental Features](#experimental-features) below, or refer to [FEATURES.md](FEATURES.md) for the full audit.
+| 命令 | 输出 | 说明 |
+|---|---|---|
+| `bun run build` | `./cli` | 常规构建 |
+| `bun run build:dev` | `./cli-dev` | 开发构建 |
+| `bun run build:dev:full` | `./cli-dev` | 开启全部可工作的实验 flag |
+| `bun run compile` | `./dist/cli` | 输出到 `dist` |
 
 ---
 
-## Model Providers
+## Provider 支持
 
-free-code supports **five API providers** out of the box. Set the corresponding environment variable to switch providers -- no code changes needed.
+当前支持 5 类 provider：
 
-### Anthropic (Direct API) -- Default
+| Provider | 启用方式 | 认证方式 |
+|---|---|---|
+| Anthropic | 默认 | `ANTHROPIC_API_KEY` 或 OAuth |
+| OpenAI | `CLAUDE_CODE_USE_OPENAI=1` | `OPENAI_API_KEY` 或 OpenAI OAuth |
+| AWS Bedrock | `CLAUDE_CODE_USE_BEDROCK=1` | AWS 凭证 |
+| Google Vertex AI | `CLAUDE_CODE_USE_VERTEX=1` | GCP ADC |
+| Anthropic Foundry | `CLAUDE_CODE_USE_FOUNDRY=1` | Foundry API Key |
 
-Use Anthropic's first-party API directly.
+### Anthropic 直连
 
-| Model | ID |
-|---|---|
-| Claude Opus 4.6 | `claude-opus-4-6` |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` |
-| Claude Haiku 4.5 | `claude-haiku-4-5` |
+```bash
+./cli
+```
+
+常见模型：
+
+- `claude-opus-4-6`
+- `claude-sonnet-4-6`
+- `claude-haiku-4-5`
 
 ### OpenAI
 
-Use OpenAI models through either Codex OAuth or a standard API-compatible base URL.
+这个仓库在原有 Codex OAuth 接入基础上，额外补上了标准 OpenAI Responses API 兼容路径。
 
-| Model | ID |
-|---|---|
-| GPT-5.3 Codex (recommended) | `gpt-5.3-codex` |
-| GPT-5.4 | `gpt-5.4` |
-| GPT-5.4 Mini | `gpt-5.4-mini` |
-
-```bash
-export CLAUDE_CODE_USE_OPENAI=1
-free-code
-```
+#### 方式 1：OpenAI API Key + Base URL
 
 ```bash
 export CLAUDE_CODE_USE_OPENAI=1
 export OPENAI_API_KEY="sk-..."
-export OPENAI_BASE_URL="https://api.openai.com/v1"   # optional
-free-code --model gpt-5.4
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+./cli --model gpt-5.4
 ```
 
-When `OPENAI_API_KEY` is set, `free-code` sends requests to the OpenAI Responses API at `OPENAI_BASE_URL` and defaults to `gpt-5.4`. Without an API key, the existing Codex OAuth flow remains available via `/login`.
+说明：
+
+- `OPENAI_BASE_URL` 可选，默认是 `https://api.openai.com/v1`
+- 使用 `OPENAI_API_KEY` 时，OpenAI provider 默认模型会走 `gpt-5.4`
+- 也支持显式指定 `gpt-5.4-mini`
+
+#### 方式 2：Codex OAuth
+
+```bash
+export CLAUDE_CODE_USE_OPENAI=1
+./cli
+```
+
+然后在交互模式里运行：
+
+```text
+/login
+```
+
+当前 OpenAI 相关模型：
+
+- `gpt-5.3-codex`
+- `gpt-5.4`
+- `gpt-5.4-mini`
 
 ### AWS Bedrock
 
-Route requests through your AWS account via Amazon Bedrock.
-
 ```bash
 export CLAUDE_CODE_USE_BEDROCK=1
-export AWS_REGION="us-east-1"   # or AWS_DEFAULT_REGION
-free-code
+export AWS_REGION="us-east-1"
+./cli
 ```
 
-Uses your standard AWS credentials (environment variables, `~/.aws/config`, or IAM role). Models are mapped to Bedrock ARN format automatically (e.g., `us.anthropic.claude-opus-4-6-v1`).
-
-| Variable | Purpose |
-|---|---|
-| `CLAUDE_CODE_USE_BEDROCK` | Enable Bedrock provider |
-| `AWS_REGION` / `AWS_DEFAULT_REGION` | AWS region (default: `us-east-1`) |
-| `ANTHROPIC_BEDROCK_BASE_URL` | Custom Bedrock endpoint |
-| `AWS_BEARER_TOKEN_BEDROCK` | Bearer token auth |
-| `CLAUDE_CODE_SKIP_BEDROCK_AUTH` | Skip auth (testing) |
-
-### Google Cloud Vertex AI
-
-Route requests through your GCP project via Vertex AI.
+### Google Vertex AI
 
 ```bash
 export CLAUDE_CODE_USE_VERTEX=1
-free-code
+./cli
 ```
 
-Uses Google Cloud Application Default Credentials (`gcloud auth application-default login`). Models are mapped to Vertex format automatically (e.g., `claude-opus-4-6@latest`).
-
 ### Anthropic Foundry
-
-Use Anthropic Foundry for dedicated deployments.
 
 ```bash
 export CLAUDE_CODE_USE_FOUNDRY=1
 export ANTHROPIC_FOUNDRY_API_KEY="..."
-free-code
-```
-
-Supports custom deployment IDs as model names.
-
-### Provider Selection Summary
-
-| Provider | Env Variable | Auth Method |
-|---|---|---|
-| Anthropic (default) | -- | `ANTHROPIC_API_KEY` or OAuth |
-| OpenAI | `CLAUDE_CODE_USE_OPENAI=1` | `OPENAI_API_KEY` or OAuth via OpenAI |
-| AWS Bedrock | `CLAUDE_CODE_USE_BEDROCK=1` | AWS credentials |
-| Google Vertex AI | `CLAUDE_CODE_USE_VERTEX=1` | `gcloud` ADC |
-| Anthropic Foundry | `CLAUDE_CODE_USE_FOUNDRY=1` | `ANTHROPIC_FOUNDRY_API_KEY` |
-
----
-
-## Requirements
-
-- **Runtime**: [Bun](https://bun.sh) >= 1.3.11
-- **OS**: macOS or Linux (Windows via WSL)
-- **Auth**: An API key or OAuth login for your chosen provider
-
-```bash
-# Install Bun if you don't have it
-curl -fsSL https://bun.sh/install | bash
-```
-
----
-
-## Build
-
-```bash
-git clone https://github.com/paoloanzn/free-code.git
-cd free-code
-bun build
 ./cli
 ```
 
-### Build Variants
-
-| Command | Output | Features | Description |
-|---|---|---|---|
-| `bun run build` | `./cli` | `VOICE_MODE` only | Production-like binary |
-| `bun run build:dev` | `./cli-dev` | `VOICE_MODE` only | Dev version stamp |
-| `bun run build:dev:full` | `./cli-dev` | All 54 experimental flags | Full unlock build |
-| `bun run compile` | `./dist/cli` | `VOICE_MODE` only | Alternative output path |
-
-### Custom Feature Flags
-
-Enable specific flags without the full bundle:
-
-```bash
-# Enable just ultraplan and ultrathink
-bun run ./scripts/build.ts --feature=ULTRAPLAN --feature=ULTRATHINK
-
-# Add a flag on top of the dev build
-bun run ./scripts/build.ts --dev --feature=BRIDGE_MODE
-```
-
 ---
 
-## Usage
+## 使用方式
 
 ```bash
-# Interactive REPL (default)
+# 交互模式
 ./cli
 
-# One-shot mode
+# 单次提问
 ./cli -p "what files are in this directory?"
 
-# Specify a model
-./cli --model claude-opus-4-6
+# 指定模型
+./cli --model gpt-5.4
 
-# Run from source (slower startup)
+# 直接从源码启动
 bun run dev
-
-# OAuth login
-./cli /login
 ```
 
-### Environment Variables Reference
+常见环境变量：
 
-| Variable | Purpose |
+| 变量 | 作用 |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `ANTHROPIC_AUTH_TOKEN` | Auth token (alternative) |
-| `ANTHROPIC_MODEL` | Override default model |
-| `ANTHROPIC_BASE_URL` | Custom API endpoint |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL` | Custom Opus model ID |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL` | Custom Sonnet model ID |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Custom Haiku model ID |
-| `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token via env |
-| `CLAUDE_CODE_API_KEY_HELPER_TTL_MS` | API key helper cache TTL |
+| `ANTHROPIC_API_KEY` | Anthropic API Key |
+| `ANTHROPIC_BASE_URL` | 自定义 Anthropic 接口地址 |
+| `CLAUDE_CODE_USE_OPENAI` | 启用 OpenAI provider |
+| `OPENAI_API_KEY` | OpenAI API Key |
+| `OPENAI_BASE_URL` | OpenAI 接口基地址，默认 `/v1` |
+| `CLAUDE_CODE_USE_BEDROCK` | 启用 Bedrock |
+| `CLAUDE_CODE_USE_VERTEX` | 启用 Vertex |
+| `CLAUDE_CODE_USE_FOUNDRY` | 启用 Foundry |
 
 ---
 
-## Experimental Features
+## 本仓库新增的 OpenAI 改动
 
-The `bun run build:dev:full` build enables all 54 working feature flags. Highlights:
+相对于上游 `free-code`，这个版本额外加入了以下能力：
 
-### Interaction & UI
-
-| Flag | Description |
-|---|---|
-| `ULTRAPLAN` | Remote multi-agent planning on Claude Code web (Opus-class) |
-| `ULTRATHINK` | Deep thinking mode -- type "ultrathink" to boost reasoning effort |
-| `VOICE_MODE` | Push-to-talk voice input and dictation |
-| `TOKEN_BUDGET` | Token budget tracking and usage warnings |
-| `HISTORY_PICKER` | Interactive prompt history picker |
-| `MESSAGE_ACTIONS` | Message action entrypoints in the UI |
-| `QUICK_SEARCH` | Prompt quick-search |
-| `SHOT_STATS` | Shot-distribution stats |
-
-### Agents, Memory & Planning
-
-| Flag | Description |
-|---|---|
-| `BUILTIN_EXPLORE_PLAN_AGENTS` | Built-in explore/plan agent presets |
-| `VERIFICATION_AGENT` | Verification agent for task validation |
-| `AGENT_TRIGGERS` | Local cron/trigger tools for background automation |
-| `AGENT_TRIGGERS_REMOTE` | Remote trigger tool path |
-| `EXTRACT_MEMORIES` | Post-query automatic memory extraction |
-| `COMPACTION_REMINDERS` | Smart reminders around context compaction |
-| `CACHED_MICROCOMPACT` | Cached microcompact state through query flows |
-| `TEAMMEM` | Team-memory files and watcher hooks |
-
-### Tools & Infrastructure
-
-| Flag | Description |
-|---|---|
-| `BRIDGE_MODE` | IDE remote-control bridge (VS Code, JetBrains) |
-| `BASH_CLASSIFIER` | Classifier-assisted bash permission decisions |
-| `PROMPT_CACHE_BREAK_DETECTION` | Cache-break detection in compaction/query flow |
-
-See [FEATURES.md](FEATURES.md) for the complete audit of all 88 flags, including 34 broken flags with reconstruction notes.
+1. OpenAI provider 支持直接读取 `OPENAI_API_KEY`
+2. 支持通过 `OPENAI_BASE_URL` 对接标准 OpenAI 兼容网关
+3. OpenAI API 路径使用 Responses API，而不是只依赖 Codex Web OAuth
+4. OpenAI provider 默认模型已补到 `gpt-5.4`
+5. `auth status`、状态页、顶部 billing 展示已补齐 OpenAI API 模式
 
 ---
 
-## Project Structure
+## 项目结构
 
-```
+```text
 scripts/
-  build.ts                # Build script with feature flag system
+  build.ts                构建脚本与 feature flag 注入
 
 src/
-  entrypoints/cli.tsx     # CLI entrypoint
-  commands.ts             # Command registry (slash commands)
-  tools.ts                # Tool registry (agent tools)
-  QueryEngine.ts          # LLM query engine
-  screens/REPL.tsx        # Main interactive UI (Ink/React)
+  entrypoints/cli.tsx     CLI 入口
+  commands.ts             Slash 命令注册
+  tools.ts                工具注册
+  QueryEngine.ts          主查询引擎
+  screens/REPL.tsx        Ink/React 终端界面
 
-  commands/               # /slash command implementations
-  tools/                  # Agent tool implementations (Bash, Read, Edit, etc.)
-  components/             # Ink/React terminal UI components
-  hooks/                  # React hooks
-  services/               # API clients, MCP, OAuth, analytics
-    api/                  # API client + Codex fetch adapter
-    oauth/                # OAuth flows (Anthropic + OpenAI)
-  state/                  # App state store
-  utils/                  # Utilities
-    model/                # Model configs, providers, validation
-  skills/                 # Skill system
-  plugins/                # Plugin system
-  bridge/                 # IDE bridge
-  voice/                  # Voice input
-  tasks/                  # Background task management
+  commands/               命令实现
+  tools/                  工具实现
+  components/             终端 UI 组件
+  hooks/                  React hooks
+  services/               API / OAuth / MCP / 分析等服务
+  state/                  状态存储
+  utils/                  通用工具
+  skills/                 Skill 系统
+  plugins/                插件系统
+  bridge/                 IDE 桥接
+  voice/                  语音输入
+  tasks/                  后台任务
 ```
 
 ---
 
-## Tech Stack
+## 技术栈
 
-| | |
+| 项 | 技术 |
 |---|---|
-| **Runtime** | [Bun](https://bun.sh) |
-| **Language** | TypeScript |
-| **Terminal UI** | React + [Ink](https://github.com/vadimdemedes/ink) |
-| **CLI Parsing** | [Commander.js](https://github.com/tj/commander.js) |
-| **Schema Validation** | Zod v4 |
-| **Code Search** | ripgrep (bundled) |
-| **Protocols** | MCP, LSP |
-| **APIs** | Anthropic Messages, OpenAI Codex, AWS Bedrock, Google Vertex AI |
+| Runtime | Bun |
+| 语言 | TypeScript |
+| 终端 UI | React + Ink |
+| CLI 解析 | Commander.js |
+| 校验 | Zod v4 |
+| 搜索 | ripgrep |
+| 协议 | MCP、LSP |
+| API | Anthropic Messages、OpenAI、Bedrock、Vertex |
 
 ---
 
-## IPFS Mirror
+## 实验特性
 
-A full copy of this repository is permanently pinned on IPFS via Filecoin:
+项目保留了大量通过 `bun:bundle` feature flag 控制的实验功能。  
+如果你要全量打开可工作的实验特性，可以使用：
 
-| | |
-|---|---|
-| **CID** | `bafybeiegvef3dt24n2znnnmzcud2vxat7y7rl5ikz7y7yoglxappim54bm` |
-| **Gateway** | https://w3s.link/ipfs/bafybeiegvef3dt24n2znnnmzcud2vxat7y7rl5ikz7y7yoglxappim54bm |
+```bash
+bun run build:dev:full
+```
 
-If this repo gets taken down, the code lives on.
+其中比较重要的包括：
 
----
+- `ULTRAPLAN`
+- `ULTRATHINK`
+- `VOICE_MODE`
+- `BRIDGE_MODE`
+- `VERIFICATION_AGENT`
+- `TEAMMEM`
+- `TOKEN_BUDGET`
 
-## Contributing
-
-Contributions are welcome. If you're working on restoring one of the 34 broken feature flags, check the reconstruction notes in [FEATURES.md](FEATURES.md) first -- many are close to compiling and just need a small wrapper or missing asset.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Commit your changes (`git commit -m 'feat: add something'`)
-4. Push to the branch (`git push origin feat/my-feature`)
-5. Open a Pull Request
+完整审计见 [FEATURES.md](./FEATURES.md)。
 
 ---
 
-## License
+## 贡献
 
-The original Claude Code source is the property of Anthropic. This fork exists because the source was publicly exposed through their npm distribution. Use at your own discretion.
+欢迎提交 issue 和 PR。  
+如果你在修复 feature flag、补 provider、修构建链，建议先阅读：
+
+- [FEATURES.md](./FEATURES.md)
+- [changes.md](./changes.md)
+
+---
+
+## 许可证与风险说明
+
+原始 Claude Code 源代码权利仍归 Anthropic 所有。  
+本项目来自一次公开暴露的源码快照整理结果，法律与合规风险需要你自行评估。
+
+请仅在你明确理解相关风险的前提下使用。

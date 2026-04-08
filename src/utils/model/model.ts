@@ -13,7 +13,6 @@ import {
   isMaxSubscriber,
   isProSubscriber,
   isTeamPremiumSubscriber,
-  isCodexSubscriber,
 } from '../auth.js'
 import { getAntModelOverrideConfig, resolveAntModel } from './antModels.js'
 import {
@@ -179,8 +178,10 @@ export function getRuntimeMainLoopModel(params: {
  * @returns The default model setting to use
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
-  if (isCodexSubscriber()) {
-    return getModelStrings().gpt53codex
+  if (getAPIProvider() === 'openai') {
+    return isCodexSubscriber()
+      ? getModelStrings().gpt53codex
+      : getModelStrings().gpt54
   }
 
   // Ants default to defaultModel from flag config, or Opus 1M if not configured
@@ -303,6 +304,9 @@ export function getCanonicalName(fullModelName: ModelName): ModelShortName {
 export function getClaudeAiUserDefaultModelDescription(
   fastMode = false,
 ): string {
+  if (getAPIProvider() === 'openai' && !isCodexSubscriber()) {
+    return 'GPT-5.4 - Advanced reasoning and code generation'
+  }
   if (isCodexSubscriber()) {
     return 'GPT-5.3 Codex · Optimized for code generation and understanding'
   }

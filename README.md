@@ -5,6 +5,10 @@
 <h1 align="center">free-code</h1>
 
 <p align="center">
+  <a href="./README.zh-CN.md">简体中文 README</a>
+</p>
+
+<p align="center">
   <strong>The free build of Claude Code.</strong><br>
   All telemetry stripped. All guardrails removed. All experimental features unlocked.<br>
   One binary, zero callbacks home.
@@ -89,9 +93,9 @@ Use Anthropic's first-party API directly.
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` |
 | Claude Haiku 4.5 | `claude-haiku-4-5` |
 
-### OpenAI Codex
+### OpenAI
 
-Use OpenAI's Codex models for code generation. Requires a Codex subscription.
+Use OpenAI models through either Codex OAuth or a standard API-compatible base URL.
 
 | Model | ID |
 |---|---|
@@ -103,6 +107,15 @@ Use OpenAI's Codex models for code generation. Requires a Codex subscription.
 export CLAUDE_CODE_USE_OPENAI=1
 free-code
 ```
+
+```bash
+export CLAUDE_CODE_USE_OPENAI=1
+export OPENAI_API_KEY="sk-..."
+export OPENAI_BASE_URL="https://api.openai.com/v1"   # optional
+free-code --model gpt-5.4
+```
+
+When `OPENAI_API_KEY` is set, `free-code` sends requests to the OpenAI Responses API at `OPENAI_BASE_URL` and defaults to `gpt-5.4`. Without an API key, the existing Codex OAuth flow remains available via `/login`.
 
 ### AWS Bedrock
 
@@ -152,7 +165,7 @@ Supports custom deployment IDs as model names.
 | Provider | Env Variable | Auth Method |
 |---|---|---|
 | Anthropic (default) | -- | `ANTHROPIC_API_KEY` or OAuth |
-| OpenAI Codex | `CLAUDE_CODE_USE_OPENAI=1` | OAuth via OpenAI |
+| OpenAI | `CLAUDE_CODE_USE_OPENAI=1` | `OPENAI_API_KEY` or OAuth via OpenAI |
 | AWS Bedrock | `CLAUDE_CODE_USE_BEDROCK=1` | AWS credentials |
 | Google Vertex AI | `CLAUDE_CODE_USE_VERTEX=1` | `gcloud` ADC |
 | Anthropic Foundry | `CLAUDE_CODE_USE_FOUNDRY=1` | `ANTHROPIC_FOUNDRY_API_KEY` |

@@ -12,8 +12,9 @@ import {
   getApiKeyFromApiKeyHelper,
   getClaudeAIOAuthTokens,
   getCodexOAuthTokens,
+  getOpenAIApiKey,
+  getOpenAIBaseUrl,
   isClaudeAISubscriber,
-  isCodexSubscriber,
   refreshAndGetAwsCredentials,
   refreshGcpCredentialsIfNeeded,
 } from 'src/utils/auth.js'
@@ -137,10 +138,12 @@ export async function getAnthropicClient({
   }
 
   logForDebugging('[API:auth] OAuth token check starting')
-  await checkAndRefreshOAuthTokenIfNeeded()
+  if (getAPIProvider() !== 'openai') {
+    await checkAndRefreshOAuthTokenIfNeeded()
+  }
   logForDebugging('[API:auth] OAuth token check complete')
 
-  if (!isClaudeAISubscriber()) {
+  if (!isClaudeAISubscriber() && getAPIProvider() !== 'openai') {
     await configureApiKeyHeaders(defaultHeaders, getIsNonInteractiveSession())
   }
 
@@ -306,10 +309,13 @@ export async function getAnthropicClient({
   }
 
   // ── Codex (OpenAI) provider via fetch adapter ─────────────────────
-  if (isCodexSubscriber()) {
+  if (getAPIProvider() === 'openai') {
     const codexTokens = getCodexOAuthTokens()
     if (codexTokens?.accessToken) {
-      const codexFetch = createCodexFetch(codexTokens.accessToken)
+      const codexFetch = createCodexFetch({
+        kind: 'oauth',
+        accessToken: codexTokens.accessToken,
+      })
       const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
         apiKey: 'codex-placeholder', // SDK requires a key but the fetch adapter handles auth
         ...ARGS,
@@ -318,6 +324,26 @@ export async function getAnthropicClient({
       }
       return new Anthropic(clientConfig)
     }
+
+    const openAIApiKey = apiKey || getOpenAIApiKey()
+    if (openAIApiKey) {
+      const openAIFetch = createCodexFetch({
+        kind: 'apiKey',
+        apiKey: openAIApiKey,
+        baseUrl: getOpenAIBaseUrl(),
+      })
+      const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
+        apiKey: 'openai-placeholder',
+        ...ARGS,
+        fetch: openAIFetch as unknown as typeof globalThis.fetch,
+        ...(isDebugToStdErr() && { logger: createStderrLogger() }),
+      }
+      return new Anthropic(clientConfig)
+    }
+
+    throw new Error(
+      'OpenAI provider selected but no OpenAI credentials were found. Set OPENAI_API_KEY or run /login.',
+    )
   }
 
   // Determine authentication method based on available tokens

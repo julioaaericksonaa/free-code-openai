@@ -16,6 +16,7 @@ import {
 import { gt } from './semver.js'
 import { loadMessageLogs } from './sessionStorage.js'
 import { getInitialSettings } from './settings/settings.js'
+import { getAPIProvider } from './model/providers.js'
 
 // Layout constants
 const MAX_LEFT_WIDTH = 50
@@ -258,8 +259,10 @@ export function getLogoDisplayData(): {
     : displayPath
   const billingType = isClaudeAISubscriber()
     ? getSubscriptionName()
-    : isCodexSubscriber()
-      ? 'Codex API Billing'
+    : getAPIProvider() === 'openai'
+      ? isCodexSubscriber()
+        ? 'Codex API Billing'
+        : 'OpenAI API Billing'
       : 'API Usage Billing'
   const agentName = getInitialSettings().agent
 

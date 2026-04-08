@@ -24,8 +24,11 @@ import {
   clearOAuthTokenCache,
   getAnthropicApiKeyWithSource,
   getAuthTokenSource,
+  getOpenAIApiKey,
   getOauthAccountInfo,
   getSubscriptionType,
+  hasOpenAIApiKeyAuth,
+  hasOpenAIProviderAuth,
   isUsing3PServices,
   saveCodexOAuthTokens,
   saveOAuthTokensIfNeeded,
@@ -258,16 +261,25 @@ export async function authStatus(opts: {
   const { source: apiKeySource } = getAnthropicApiKeyWithSource()
   const hasApiKeyEnvVar =
     !!process.env.ANTHROPIC_API_KEY && !isRunningOnHomespace()
+  const hasOpenAIApiKey = !!getOpenAIApiKey()
   const oauthAccount = getOauthAccountInfo()
   const subscriptionType = getSubscriptionType()
   const using3P = isUsing3PServices()
   const loggedIn =
-    hasToken || apiKeySource !== 'none' || hasApiKeyEnvVar || using3P
+    hasToken ||
+    apiKeySource !== 'none' ||
+    hasApiKeyEnvVar ||
+    using3P ||
+    hasOpenAIProviderAuth()
 
   // Determine auth method
   let authMethod: string = 'none'
   if (using3P) {
     authMethod = 'third_party'
+  } else if (getAPIProvider() === 'openai' && hasOpenAIApiKeyAuth()) {
+    authMethod = 'api_key'
+  } else if (getAPIProvider() === 'openai' && hasOpenAIProviderAuth()) {
+    authMethod = 'oauth_token'
   } else if (authTokenSource === 'claude.ai') {
     authMethod = 'claude.ai'
   } else if (authTokenSource === 'apiKeyHelper') {
@@ -305,6 +317,8 @@ export async function authStatus(opts: {
     }
     if (!hasAuthProperty && hasApiKeyEnvVar) {
       process.stdout.write('API key: ANTHROPIC_API_KEY\n')
+    } else if (!hasAuthProperty && hasOpenAIApiKey) {
+      process.stdout.write('API key: OPENAI_API_KEY\n')
     }
     if (!loggedIn) {
       process.stdout.write(
@@ -318,6 +332,8 @@ export async function authStatus(opts: {
         ? apiKeySource
         : hasApiKeyEnvVar
           ? 'ANTHROPIC_API_KEY'
+          : hasOpenAIApiKey
+            ? 'OPENAI_API_KEY'
           : null
     const output: Record<string, string | boolean | null> = {
       loggedIn,

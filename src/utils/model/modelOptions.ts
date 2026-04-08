@@ -2,7 +2,6 @@
 import { getInitialMainLoopModel } from '../../bootstrap/state.js'
 import {
   isClaudeAISubscriber,
-  isCodexSubscriber,
   isMaxSubscriber,
   isTeamPremiumSubscriber,
 } from '../auth.js'
@@ -317,7 +316,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
   }
 
   // Codex subscribers get OpenAI model options
-  if (isCodexSubscriber()) {
+  if (getAPIProvider() === 'openai') {
     return [
       getDefaultOptionForUser(),
       getGpt54Option(),

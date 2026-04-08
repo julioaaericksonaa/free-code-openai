@@ -24,20 +24,31 @@ export const CODEX_MODELS = [
   { id: 'gpt-5.1-codex-mini', label: 'GPT-5.1 Codex Mini', description: 'Fast Codex model' },
   { id: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max', description: 'Max Codex model' },
   { id: 'gpt-5.4', label: 'GPT-5.4', description: 'Latest GPT' },
+  { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', description: 'Fast GPT' },
   { id: 'gpt-5.2', label: 'GPT-5.2', description: 'GPT-5.2' },
 ] as const
 
 export const DEFAULT_CODEX_MODEL = 'gpt-5.2-codex'
+export const DEFAULT_OPENAI_MODEL = 'gpt-5.4'
 
 /**
  * Maps Claude model names to corresponding Codex model names.
  * @param claudeModel - The Claude model name to map
  * @returns The corresponding Codex model ID
  */
-export function mapClaudeModelToCodex(claudeModel: string | null): string {
-  if (!claudeModel) return DEFAULT_CODEX_MODEL
+export function mapClaudeModelToCodex(
+  claudeModel: string | null,
+  target: 'codex' | 'apiKey' = 'codex',
+): string {
+  if (!claudeModel) {
+    return target === 'apiKey' ? DEFAULT_OPENAI_MODEL : DEFAULT_CODEX_MODEL
+  }
   if (isCodexModel(claudeModel)) return claudeModel
   const lower = claudeModel.toLowerCase()
+  if (target === 'apiKey') {
+    if (lower.includes('haiku')) return 'gpt-5.4-mini'
+    return 'gpt-5.4'
+  }
   if (lower.includes('opus')) return 'gpt-5.1-codex-max'
   if (lower.includes('haiku')) return 'gpt-5.1-codex-mini'
   if (lower.includes('sonnet')) return 'gpt-5.2-codex'
@@ -219,7 +230,10 @@ function translateMessages(
  * @param anthropicBody - The Anthropic request body to translate
  * @returns Object containing the translated Codex body and model
  */
-function translateToCodexBody(anthropicBody: Record<string, unknown>): {
+function translateToCodexBody(
+  anthropicBody: Record<string, unknown>,
+  target: 'codex' | 'apiKey' = 'codex',
+): {
   codexBody: Record<string, unknown>
   codexModel: string
 } {
@@ -231,7 +245,7 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
   const claudeModel = anthropicBody.model as string
   const anthropicTools = (anthropicBody.tools || []) as AnthropicTool[]
 
-  const codexModel = mapClaudeModelToCodex(claudeModel)
+  const codexModel = mapClaudeModelToCodex(claudeModel, target)
 
   // Build system instructions
   let instructions = ''
@@ -738,15 +752,38 @@ async function translateCodexStreamToAnthropic(
 
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex/responses'
 
+type OpenAIFetchConfig =
+  | {
+      kind: 'oauth'
+      accessToken: string
+    }
+  | {
+      kind: 'apiKey'
+      apiKey: string
+      baseUrl: string
+    }
+
+function getResponsesUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, '')
+  if (trimmed.endsWith('/responses')) {
+    return trimmed
+  }
+  if (trimmed.endsWith('/v1')) {
+    return `${trimmed}/responses`
+  }
+  return `${trimmed}/v1/responses`
+}
+
 /**
- * Creates a fetch function that intercepts Anthropic API calls and routes them to Codex.
- * @param accessToken - The Codex access token for authentication
- * @returns A fetch function that translates Anthropic requests to Codex format
+ * Creates a fetch function that intercepts Anthropic API calls and routes them
+ * to either the ChatGPT Codex backend or a standard OpenAI-compatible
+ * Responses API endpoint.
  */
 export function createCodexFetch(
-  accessToken: string,
+  config: OpenAIFetchConfig,
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
-  const accountId = extractAccountId(accessToken)
+  const accountId =
+    config.kind === 'oauth' ? extractAccountId(config.accessToken) : null
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input)
@@ -772,24 +809,38 @@ export function createCodexFetch(
 
     // Get current token (may have been refreshed)
     const tokens = getCodexOAuthTokens()
-    const currentToken = tokens?.accessToken || accessToken
+    const authHeader =
+      config.kind === 'oauth'
+        ? `Bearer ${tokens?.accessToken || config.accessToken}`
+        : `Bearer ${config.apiKey}`
 
     // Translate to Codex format
-    const { codexBody, codexModel } = translateToCodexBody(anthropicBody)
+    const { codexBody, codexModel } = translateToCodexBody(
+      anthropicBody,
+      config.kind === 'oauth' ? 'codex' : 'apiKey',
+    )
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      Authorization: authHeader,
+    }
+
+    if (config.kind === 'oauth') {
+      headers['chatgpt-account-id'] = accountId!
+      headers.originator = 'pi'
+      headers['OpenAI-Beta'] = 'responses=experimental'
+    }
 
     // Call Codex API
-    const codexResponse = await globalThis.fetch(CODEX_BASE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        Authorization: `Bearer ${currentToken}`,
-        'chatgpt-account-id': accountId,
-        originator: 'pi',
-        'OpenAI-Beta': 'responses=experimental',
+    const codexResponse = await globalThis.fetch(
+      config.kind === 'oauth' ? CODEX_BASE_URL : getResponsesUrl(config.baseUrl),
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(codexBody),
       },
-      body: JSON.stringify(codexBody),
-    })
+    )
 
     if (!codexResponse.ok) {
       const errorText = await codexResponse.text()

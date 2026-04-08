@@ -116,7 +116,9 @@ export function isAnthropicAuthEnabled(): boolean {
   const is3P =
     isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
     isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
+    isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
+    (isEnvTruthy(process.env.CLAUDE_CODE_USE_OPENAI) &&
+      !!process.env.OPENAI_API_KEY)
 
   // Check if user has configured an external API key source
   // This allows externally-provided API keys to work (without requiring proxy configuration)
@@ -211,6 +213,18 @@ export type ApiKeySource =
   | 'apiKeyHelper'
   | '/login managed key'
   | 'none'
+
+export function getOpenAIApiKey(): string | null {
+  return process.env.OPENAI_API_KEY || null
+}
+
+export function hasOpenAIApiKeyAuth(): boolean {
+  return !!getOpenAIApiKey()
+}
+
+export function getOpenAIBaseUrl(): string {
+  return process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+}
 
 export function getAnthropicApiKey(): null | string {
   const { key } = getAnthropicApiKeyWithSource()
@@ -1635,6 +1649,14 @@ export function isCodexSubscriber(): boolean {
   // Verify we actually have valid Codex tokens
   const tokens = getCodexOAuthTokens()
   return !!tokens?.accessToken
+}
+
+export function hasOpenAIProviderAuth(): boolean {
+  if (getAPIProvider() !== 'openai') {
+    return false
+  }
+
+  return isCodexSubscriber() || hasOpenAIApiKeyAuth()
 }
 
 /**
